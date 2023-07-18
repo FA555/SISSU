@@ -5,8 +5,20 @@ pub(crate) enum Color {
     Black,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+impl Color {
+    pub(crate) fn values() -> impl Iterator<Item = Color> {
+        [Color::Red, Color::Green, Color::Black].iter().copied()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Dragon(pub(crate) Color);
+
+impl Dragon {
+    pub(crate) fn values() -> impl Iterator<Item = Dragon> {
+        Color::values().map(Dragon)
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Card {
@@ -25,20 +37,20 @@ pub(crate) enum Place {
 #[derive(Clone, Copy)]
 pub(crate) enum Action {
     Pop {
-        tray: usize,
+        src: usize,
     },
     Move {
-        from: Place,
-        to: Place,
+        src: Place,
+        dest: Place,
         count: usize,
     },
     Collapse(Dragon),
 }
 
-pub(crate) fn can_be_stacked(from: Card, to: Card) -> bool {
-    match (from, to) {
-        (Card::Number(color_from, number_from), Card::Number(color_to, number_to)) => {
-            color_from != color_to && number_from + 1 == number_to
+pub(crate) fn can_be_stacked(src: Card, dest: Card) -> bool {
+    match (src, dest) {
+        (Card::Number(color_src, number_src), Card::Number(color_dest, number_dest)) => {
+            color_src != color_dest && number_src + 1 == number_dest
         }
         _ => false,
     }

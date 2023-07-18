@@ -6,6 +6,7 @@ use std::rc::Rc;
 type Priority = f64;
 
 pub(crate) struct State {
+    lowest_each_suit: HashMap<Color, i8>,
     trays: Vec<Vec<Card>>,
     slots: Vec<Option<Card>>,
     action: Option<Action>,
@@ -18,6 +19,7 @@ pub(crate) struct State {
 impl State {
     fn new() -> Self {
         Self {
+            lowest_each_suit: HashMap::new(),
             trays: Vec::new(),
             slots: Vec::new(),
             action: None,
@@ -36,6 +38,7 @@ impl State {
 
     fn transition(self: &Rc<Self>, action: &Action) -> Rc<State> {
         let mut state = State {
+            lowest_each_suit: HashMap::new(),
             trays: self.trays.clone(),
             slots: self.slots.clone(),
             step: self.step + 1,
@@ -46,10 +49,14 @@ impl State {
         };
 
         match *action {
-            Action::Pop { tray } => {
+            Action::Pop { src: tray } => {
                 state.trays[tray].pop().unwrap();
             }
-            Action::Move { from, to, count } => {
+            Action::Move {
+                src: from,
+                dest: to,
+                count,
+            } => {
                 let mut cards_to_be_moved = Vec::<Card>::with_capacity(count);
 
                 match from {
@@ -99,7 +106,7 @@ impl State {
             }
         }
 
-        state.auto_remove_cards();
+        state.auto_remove_cards(); // lowest_per_suit is updated here
         state.card_count = state.calc_card_count();
         state.priority = state.calc_priority();
 
@@ -154,10 +161,8 @@ impl State {
     }
 
     fn auto_remove_cards(&mut self) {
-        let mut lowest_per_suit = HashMap::<Color, i8>::new();
-        lowest_per_suit.insert(Color::Red, 10);
-        lowest_per_suit.insert(Color::Green, 10);
-        lowest_per_suit.insert(Color::Black, 10);
+        self.lowest_each_suit =
+            HashMap::from([(Color::Red, 10), (Color::Green, 10), (Color::Black, 10)]);
 
         let mut call_again = false;
 
@@ -177,8 +182,8 @@ impl State {
 
                 for &card in tray.iter() {
                     if let Card::Number(color, number) = card {
-                        if number < lowest_per_suit[&color] {
-                            lowest_per_suit.insert(color, number);
+                        if number < self.lowest_each_suit[&color] {
+                            self.lowest_each_suit.insert(color, number);
                         }
                     }
                 }
@@ -186,23 +191,23 @@ impl State {
 
             for &card in self.slots.iter() {
                 if let Some(Card::Number(color, number)) = card {
-                    if number < lowest_per_suit[&color] {
-                        lowest_per_suit.insert(color, number);
+                    if number < self.lowest_each_suit[&color] {
+                        self.lowest_each_suit.insert(color, number);
                     }
                 }
             }
 
-            let mut try_remove_with_points_greater_than_one = |pile: &mut dyn Pile| {
+            let mut try_remove_points_gtone = |pile: &mut dyn Pile| {
                 if let Card::Number(color, number) = pile.top_card().unwrap() {
                     if number > 2 {
-                        if number <= lowest_per_suit[&Color::Red]
-                            && number <= lowest_per_suit[&Color::Green]
-                            && number <= lowest_per_suit[&Color::Black]
+                        if number <= self.lowest_each_suit[&Color::Red]
+                            && number <= self.lowest_each_suit[&Color::Green]
+                            && number <= self.lowest_each_suit[&Color::Black]
                         {
                             pile.remove_to_foundations();
                             call_again = true;
                         }
-                    } else if number == 2 && number == lowest_per_suit[&color] {
+                    } else if number == 2 && number == self.lowest_each_suit[&color] {
                         pile.remove_to_foundations();
                         call_again = true;
                     }
@@ -211,17 +216,134 @@ impl State {
 
             for tray in self.trays.iter_mut() {
                 if !tray.is_empty() {
-                    try_remove_with_points_greater_than_one(tray);
+                    try_remove_points_gtone(tray);
                 }
             }
 
             for card in self.slots.iter_mut() {
-                try_remove_with_points_greater_than_one(card);
+                try_remove_points_gtone(card);
             }
 
             if !call_again {
                 break;
             }
         }
+    }
+
+    fn valid_actions(&self) -> Vec<Action> {
+        let mut actions = Vec::new();
+        let exposed_dragon_count = HashMap::from([
+            (Dragon(Color::Red), 0),
+            (Dragon(Color::Green), 0),
+            (Dragon(Color::Black), 0),
+        ]);
+
+        for (i, tray) in self.trays.iter().enumerate() {
+            if tray.is_empty() {
+                continue;
+            }
+
+            if let &Card::Dragon(dragon) = tray.last().unwrap() {
+                actions.push(Action::Collapse(dragon));
+            } else if let &Card::Number(color, number) = tray.last().unwrap() {
+                if self.lowest_each_suit[&color] == number {
+                    actions.push(Action::Pop { src: i });
+                }
+            }
+
+            for (j, &card) in tray.iter().enumerate().rev() {
+                for (k, other_tray) in self.trays.iter().enumerate() {
+                    if i == k {
+                        continue;
+                    }
+
+                    if !other_tray.is_empty() {
+                        let &target_card = other_tray.last().unwrap();
+                        if can_be_stacked(card, target_card) {
+                            actions.push(Action::Move {
+                                src: Place::Tray(i),
+                                dest: Place::Tray(k),
+                                count: tray.len() - k,
+                            });
+                        }
+                    } else if !tray.is_empty() && j != 0 {
+                        // (k, other_tray) is empty
+                        actions.push(Action::Move {
+                            src: Place::Tray(i),
+                            dest: Place::Tray(k),
+                            count: tray.len() - j,
+                        });
+                    }
+                }
+
+                if j > 0 && !can_be_stacked(card, tray[j - 1]) {
+                    break;
+                }
+            }
+        }
+
+        let mut has_empty_slot = false;
+        let mut has_empty_slot_for_specicific_dragon = HashMap::from([
+            (Dragon(Color::Red), false),
+            (Dragon(Color::Green), false),
+            (Dragon(Color::Black), false),
+        ]);
+
+        for (i, &slot) in self.slots.iter().enumerate() {
+            match slot {
+                None => {
+                    has_empty_slot = true;
+                }
+                Some(Card::Full) => {
+                    continue;
+                }
+                Some(card) => {
+                    if let Card::Dragon(dragon) = card {
+                        has_empty_slot_for_specicific_dragon.insert(dragon, true);
+                    }
+                    for (j, tray) in self.trays.iter().enumerate() {
+                        if tray.is_empty() || can_be_stacked(card, *tray.last().unwrap()) {
+                            actions.push(Action::Move {
+                                src: Place::Slot(i),
+                                dest: Place::Tray(j),
+                                count: 1,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        for dragon in Dragon::values() {
+            if exposed_dragon_count[&dragon] == 0
+                && (has_empty_slot || has_empty_slot_for_specicific_dragon[&dragon])
+            {
+                actions.push(Action::Collapse(dragon));
+            }
+        }
+
+        actions
+    }
+
+    fn valid_slot_actions(&self) -> Vec<Action> {
+        let mut actions = Vec::new();
+
+        for (i, tray) in self.trays.iter().enumerate() {
+            if tray.is_empty() {
+                continue;
+            }
+
+            for (j, &slot) in self.slots.iter().enumerate() {
+                if slot.is_none() {
+                    actions.push(Action::Move {
+                        src: Place::Tray(i),
+                        dest: Place::Slot(j),
+                        count: 1,
+                    });
+                }
+            }
+        }
+
+        actions
     }
 }
