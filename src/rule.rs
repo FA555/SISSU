@@ -1,3 +1,6 @@
+pub(crate) use std::fmt::{Display, Formatter, Result as FmtResult};
+pub(crate) use crate::constant::{SLOT_COUNT, TRAY_COUNT};
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Color {
     Red,
@@ -11,6 +14,16 @@ impl Color {
     }
 }
 
+impl Display for Color {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            Color::Red => write!(f, "Red"),
+            Color::Green => write!(f, "Green"),
+            Color::Black => write!(f, "Blue"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Dragon(pub(crate) Color);
 
@@ -20,7 +33,13 @@ impl Dragon {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+impl Display for Dragon {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "{} Dragon", self.0)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Hash)]
 pub(crate) enum Card {
     Number(Color, i8),
     Dragon(Dragon),
@@ -34,10 +53,19 @@ pub(crate) enum Place {
     Slot(usize),
 }
 
+impl Display for Place {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            Place::Tray(index) => write!(f, "Tray {index}"),
+            Place::Slot(index) => write!(f, "Slot {index}"),
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) enum Action {
     Pop {
-        src: usize,
+        src: Place,
     },
     Move {
         src: Place,

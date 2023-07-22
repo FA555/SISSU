@@ -1,6 +1,7 @@
 use crate::rule::*;
 // use crate::rule::{Action, Card, Color, Pile, Place, can_be_stacked};
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 type Priority = f64;
@@ -9,15 +10,42 @@ pub(crate) struct State {
     lowest_each_suit: HashMap<Color, i8>,
     trays: Vec<Vec<Card>>,
     slots: Vec<Option<Card>>,
-    action: Option<Action>,
-    prev_state: Option<Rc<State>>,
+    pub(crate) action: Option<Action>,
+    pub(crate) prev_state: Option<Rc<State>>,
     step: usize,
-    card_count: usize,
+    pub(crate) card_count: usize,
     priority: Priority,
 }
 
+impl PartialOrd for State {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.priority.partial_cmp(&other.priority)
+    }
+}
+
+impl Ord for State {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.priority.partial_cmp(&other.priority).unwrap()
+    }
+}
+
+impl PartialEq for State {
+    fn eq(&self, other: &Self) -> bool {
+        self.trays == other.trays && self.slots == other.slots
+    }
+}
+
+impl Eq for State {}
+
+impl Hash for State {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.trays.hash(state);
+        self.slots.hash(state);
+    }
+}
+
 impl State {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             lowest_each_suit: HashMap::new(),
             trays: Vec::new(),
@@ -30,13 +58,13 @@ impl State {
         }
     }
 
-    fn with_trays(trays: &[Vec<Card>]) -> Self {
+    pub(crate) fn with_trays(trays: &[Vec<Card>]) -> Self {
         let mut state = Self::new();
         state.trays = trays.iter().map(|_| Vec::new()).collect();
         state
     }
 
-    fn transition(self: &Rc<Self>, action: &Action) -> Rc<State> {
+    pub(crate) fn transit(self: &Rc<Self>, action: &Action) -> Rc<State> {
         let mut state = State {
             lowest_each_suit: HashMap::new(),
             trays: self.trays.clone(),
@@ -49,8 +77,15 @@ impl State {
         };
 
         match *action {
-            Action::Pop { src: tray } => {
-                state.trays[tray].pop().unwrap();
+            Action::Pop { src } => {
+                match src {
+                    Place::Tray(tray) => {
+                        state.trays[tray].pop();
+                    }
+                    Place::Slot(_) => {
+                        panic!("Impossible to pop from slot.");
+                    }
+                }
             }
             Action::Move {
                 src: from,
@@ -230,7 +265,7 @@ impl State {
         }
     }
 
-    fn valid_actions(&self) -> Vec<Action> {
+    pub(crate) fn valid_actions(&self) -> Vec<Action> {
         let mut actions = Vec::new();
         let exposed_dragon_count = HashMap::from([
             (Dragon(Color::Red), 0),
@@ -247,7 +282,7 @@ impl State {
                 actions.push(Action::Collapse(dragon));
             } else if let &Card::Number(color, number) = tray.last().unwrap() {
                 if self.lowest_each_suit[&color] == number {
-                    actions.push(Action::Pop { src: i });
+                    actions.push(Action::Pop { src: Place::Tray(i) });
                 }
             }
 
@@ -325,7 +360,7 @@ impl State {
         actions
     }
 
-    fn valid_slot_actions(&self) -> Vec<Action> {
+    pub(crate) fn valid_slot_actions(&self) -> Vec<Action> {
         let mut actions = Vec::new();
 
         for (i, tray) in self.trays.iter().enumerate() {
