@@ -1,6 +1,7 @@
 use crate::rule::*;
-// use crate::rule::{Action, Card, Color, Pile, Place, can_be_stacked};
+
 use std::collections::HashMap;
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
@@ -8,13 +9,35 @@ type Priority = f64;
 
 pub(crate) struct State {
     lowest_each_suit: HashMap<Color, i8>,
-    trays: Vec<Vec<Card>>,
-    slots: Vec<Option<Card>>,
+    trays: [Vec<Card>; TRAY_COUNT],
+    slots: [Option<Card>; SLOT_COUNT],
     pub(crate) action: Option<Action>,
     pub(crate) prev_state: Option<Rc<State>>,
     step: usize,
     pub(crate) card_count: usize,
     priority: Priority,
+}
+
+impl fmt::Display for State {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut s = String::new();
+        s.push_str("[ ");
+        for slot in self.slots.iter() {
+            match slot {
+                Some(card) => s.push_str(&format!("{card} ")),
+                None => s.push_str("() "),
+            }
+        }
+        s.push_str("]\n");
+        for (i, tray) in self.trays.iter().enumerate() {
+            s.push_str(&format!("Tray {i}: ", i = i + 1));
+            for card in tray.iter() {
+                s.push_str(&format!("{card} "));
+            }
+            s.push('\n');
+        }
+        write!(f, "{}", s)
+    }
 }
 
 impl PartialOrd for State {
@@ -45,11 +68,13 @@ impl Hash for State {
 }
 
 impl State {
+    #[allow(unused)]
     pub(crate) fn new() -> Self {
+        const EMPTY_VEC_CARD: Vec<Card> = vec![];
         Self {
             lowest_each_suit: HashMap::new(),
-            trays: Vec::new(),
-            slots: Vec::new(),
+            trays: [EMPTY_VEC_CARD; TRAY_COUNT],
+            slots: [None; SLOT_COUNT],
             action: None,
             prev_state: None,
             step: 0,
@@ -58,9 +83,23 @@ impl State {
         }
     }
 
-    pub(crate) fn with_trays(trays: &[Vec<Card>]) -> Self {
-        let mut state = Self::new();
-        state.trays = trays.iter().map(|_| Vec::new()).collect();
+    pub(crate) fn with_trays_and_slots(
+        trays: &[Vec<Card>; TRAY_COUNT],
+        slots: &[Option<Card>; SLOT_COUNT],
+    ) -> Self {
+        let mut state = Self {
+            lowest_each_suit: HashMap::new(),
+            trays: trays.to_owned(),
+            slots: slots.to_owned(),
+            action: None,
+            prev_state: None,
+            step: 0,
+            card_count: 0,
+            priority: 0.,
+        };
+        state.auto_remove_cards(); // lowest_per_suit is updated here
+        state.card_count = state.calc_card_count();
+        state.priority = state.calc_priority();
         state
     }
 
@@ -77,16 +116,14 @@ impl State {
         };
 
         match *action {
-            Action::Pop { src } => {
-                match src {
-                    Place::Tray(tray) => {
-                        state.trays[tray].pop();
-                    }
-                    Place::Slot(_) => {
-                        panic!("Impossible to pop from slot.");
-                    }
+            Action::Pop { src } => match src {
+                Place::Tray(tray) => {
+                    state.trays[tray].pop();
                 }
-            }
+                Place::Slot(_) => {
+                    panic!("Impossible to pop from slot.");
+                }
+            },
             Action::Move {
                 src: from,
                 dest: to,
@@ -166,42 +203,44 @@ impl State {
     }
 
     fn calc_priority(&self) -> Priority {
-        let mut stacked_cards = 0.;
+        let mut priority_of_cards: Priority = 0.;
 
         for tray in self.trays.iter() {
             if tray.is_empty() {
                 continue;
             }
 
-            let mut local_stacked_cards = 0;
+            let mut cards_stacked_cur_tray = 0;
 
             for i in ((tray.len() - 1)..0).rev() {
                 if can_be_stacked(tray[i], tray[i - 1]) {
-                    local_stacked_cards += 1;
+                    cards_stacked_cur_tray += 1;
                 }
             }
 
-            if local_stacked_cards == tray.len() - 1 {
+            if cards_stacked_cur_tray == tray.len() - 1 {
                 if let Card::Number(_, 9) = tray[0] {
-                    stacked_cards += local_stacked_cards as f64 * 1.2;
+                    priority_of_cards += cards_stacked_cur_tray as f64 * 1.2;
                 } else {
-                    stacked_cards += local_stacked_cards as f64 * 1.1;
+                    priority_of_cards += cards_stacked_cur_tray as f64 * 1.1;
                 }
             } else {
-                stacked_cards += local_stacked_cards as f64;
+                priority_of_cards += cards_stacked_cur_tray as f64;
             }
         }
 
-        self.card_count as f64 + self.step as f64 * 0.1 - stacked_cards
+        self.card_count as f64 + self.step as f64 * 0.1 - priority_of_cards
     }
 
     fn auto_remove_cards(&mut self) {
         self.lowest_each_suit =
             HashMap::from([(Color::Red, 10), (Color::Green, 10), (Color::Black, 10)]);
 
-        let mut call_again = false;
+        let mut call_again;
 
         loop {
+            call_again = false;
+
             for tray in self.trays.iter_mut() {
                 if tray.is_empty() {
                     continue;
@@ -232,8 +271,8 @@ impl State {
                 }
             }
 
-            let mut try_remove_points_gtone = |pile: &mut dyn Pile| {
-                if let Card::Number(color, number) = pile.top_card().unwrap() {
+            let mut try_remove_points_gt_one = |pile: &mut dyn Pile| {
+                if let Some(Card::Number(color, number)) = pile.top_card() {
                     if number > 2 {
                         if number <= self.lowest_each_suit[&Color::Red]
                             && number <= self.lowest_each_suit[&Color::Green]
@@ -251,12 +290,12 @@ impl State {
 
             for tray in self.trays.iter_mut() {
                 if !tray.is_empty() {
-                    try_remove_points_gtone(tray);
+                    try_remove_points_gt_one(tray);
                 }
             }
 
             for card in self.slots.iter_mut() {
-                try_remove_points_gtone(card);
+                try_remove_points_gt_one(card);
             }
 
             if !call_again {
@@ -267,7 +306,7 @@ impl State {
 
     pub(crate) fn valid_actions(&self) -> Vec<Action> {
         let mut actions = Vec::new();
-        let exposed_dragon_count = HashMap::from([
+        let mut exposed_dragon_count = HashMap::from([
             (Dragon(Color::Red), 0),
             (Dragon(Color::Green), 0),
             (Dragon(Color::Black), 0),
@@ -279,10 +318,12 @@ impl State {
             }
 
             if let &Card::Dragon(dragon) = tray.last().unwrap() {
-                actions.push(Action::Collapse(dragon));
+                *exposed_dragon_count.get_mut(&dragon).unwrap() += 1;
             } else if let &Card::Number(color, number) = tray.last().unwrap() {
                 if self.lowest_each_suit[&color] == number {
-                    actions.push(Action::Pop { src: Place::Tray(i) });
+                    actions.push(Action::Pop {
+                        src: Place::Tray(i),
+                    });
                 }
             }
 
@@ -298,7 +339,7 @@ impl State {
                             actions.push(Action::Move {
                                 src: Place::Tray(i),
                                 dest: Place::Tray(k),
-                                count: tray.len() - k,
+                                count: tray.len() - j,
                             });
                         }
                     } else if !tray.is_empty() && j != 0 {
@@ -334,6 +375,7 @@ impl State {
                 }
                 Some(card) => {
                     if let Card::Dragon(dragon) = card {
+                        *exposed_dragon_count.get_mut(&dragon).unwrap() += 1;
                         has_empty_slot_for_specicific_dragon.insert(dragon, true);
                     }
                     for (j, tray) in self.trays.iter().enumerate() {
@@ -350,7 +392,7 @@ impl State {
         }
 
         for dragon in Dragon::values() {
-            if exposed_dragon_count[&dragon] == 0
+            if exposed_dragon_count[&dragon] == DRAGON_COUNT
                 && (has_empty_slot || has_empty_slot_for_specicific_dragon[&dragon])
             {
                 actions.push(Action::Collapse(dragon));
