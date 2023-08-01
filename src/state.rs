@@ -1,7 +1,6 @@
 use crate::rule::*;
 
 use std::collections::HashMap;
-use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
@@ -9,35 +8,13 @@ type Priority = f64;
 
 pub(crate) struct State {
     lowest_each_suit: HashMap<Color, i8>,
-    trays: [Vec<Card>; TRAY_COUNT],
-    slots: [Option<Card>; SLOT_COUNT],
+    pub(crate) trays: [Vec<Card>; TRAY_COUNT],
+    pub(crate) slots: [Option<Card>; SLOT_COUNT],
     pub(crate) action: Option<Action>,
     pub(crate) prev_state: Option<Rc<State>>,
     step: usize,
     pub(crate) card_count: usize,
     priority: Priority,
-}
-
-impl fmt::Display for State {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut s = String::new();
-        s.push_str("[ ");
-        for slot in self.slots.iter() {
-            match slot {
-                Some(card) => s.push_str(&format!("{card} ")),
-                None => s.push_str("() "),
-            }
-        }
-        s.push_str("]\n");
-        for (i, tray) in self.trays.iter().enumerate() {
-            s.push_str(&format!("Tray {i}: ", i = i + 1));
-            for card in tray.iter() {
-                s.push_str(&format!("{card} "));
-            }
-            s.push('\n');
-        }
-        write!(f, "{}", s)
-    }
 }
 
 impl PartialOrd for State {
@@ -107,7 +84,7 @@ impl State {
         let mut state = State {
             lowest_each_suit: HashMap::new(),
             trays: self.trays.clone(),
-            slots: self.slots.clone(),
+            slots: self.slots,
             step: self.step + 1,
             action: Some(*action),
             prev_state: Some(self.clone()),
@@ -129,7 +106,7 @@ impl State {
                 dest: to,
                 count,
             } => {
-                let mut cards_to_be_moved = Vec::<Card>::with_capacity(count);
+                let mut cards_to_be_moved = Vec::with_capacity(count);
 
                 match from {
                     Place::Tray(tray) => {
@@ -171,7 +148,7 @@ impl State {
 
                 for slot in state.slots.iter_mut() {
                     if slot.is_none() {
-                        *slot = Some(Card::Full);
+                        *slot = Some(Card::CollapsedDragon);
                         break;
                     }
                 }
@@ -193,7 +170,7 @@ impl State {
         }
 
         for card in self.slots.iter().flatten() {
-            if let Card::Full = card {
+            if let Card::CollapsedDragon = card {
             } else {
                 count += 1;
             }
@@ -233,13 +210,10 @@ impl State {
     }
 
     fn auto_remove_cards(&mut self) {
-        self.lowest_each_suit =
-            HashMap::from([(Color::Red, 10), (Color::Green, 10), (Color::Black, 10)]);
-
-        let mut call_again;
-
         loop {
-            call_again = false;
+            let mut call_again = false;
+            self.lowest_each_suit =
+                HashMap::from([(Color::Red, 10), (Color::Green, 10), (Color::Black, 10)]);
 
             for tray in self.trays.iter_mut() {
                 if tray.is_empty() {
@@ -370,7 +344,7 @@ impl State {
                 None => {
                     has_empty_slot = true;
                 }
-                Some(Card::Full) => {
+                Some(Card::CollapsedDragon) => {
                     continue;
                 }
                 Some(card) => {
