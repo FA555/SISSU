@@ -1,15 +1,22 @@
 use crate::rule::{Action, Card, Color, Place, SLOT_COUNT, TRAY_COUNT};
 use crate::state::State;
 
+use colored::Colorize;
 use std::fmt;
 
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Action::Pop { src } => write!(f, "Pop from {src}"),
-            Action::Move { src, dest, count } => {
-                write!(f, "Move {count} card{} from {src} to {dest}", if *count > 1 { "s" } else { "" })
-            }
+            Action::Move { src, dest, count } => write!(
+                f,
+                "Move {} from {src} to {dest}",
+                if *count == 1 {
+                    format!("{count} card")
+                } else {
+                    format!("{count} cards").magenta().to_string()
+                },
+            ),
             Action::CollapseDragon(color) => write!(f, "Collapse {color} Dragon"),
         }
     }
@@ -39,8 +46,8 @@ impl fmt::Display for Color {
 impl fmt::Display for Place {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Place::Tray(index) => write!(f, "Tray {index}", index = index + 1),
-            Place::Slot(index) => write!(f, "Slot {index}", index = index + 1),
+            Place::Tray(index) => write!(f, "{}", format!("Tray {}", index + 1).blue()),
+            Place::Slot(index) => write!(f, "{}", format!("Slot {}", index + 1).red()),
         }
     }
 }
