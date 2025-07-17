@@ -1,4 +1,5 @@
 pub(crate) use crate::constant::{DRAGON_COUNT, SLOT_COUNT, TRAY_COUNT};
+use std::collections::HashMap;
 use std::str::FromStr;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -27,7 +28,7 @@ impl FromStr for Color {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Hash, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub(crate) enum Card {
     CollapsedDragon,
     Dragon(Color),
@@ -99,6 +100,50 @@ pub(crate) fn can_be_stacked(src: Card, dest: Card) -> bool {
         }
         _ => false,
     }
+}
+
+pub(crate) fn validate_game(
+    trays: &[Vec<Card>; TRAY_COUNT],
+    slots: &[Option<Card>; SLOT_COUNT],
+) -> Result<(), String> {
+    let mut bucket = HashMap::<Card, usize>::new();
+    for tray in trays.iter() {
+        for card in tray.iter() {
+            *bucket.entry(*card).or_insert(0) += 1;
+        }
+    }
+    for slot in slots.iter() {
+        if let Some(card) = slot {
+            *bucket.entry(*card).or_insert(0) += 1;
+        }
+    }
+
+    let get = |card: Card| -> usize { bucket.get(&card).copied().unwrap_or(0) };
+
+    for color in Color::values() {
+        let dragon_count = get(Card::Dragon(color));
+        if dragon_count > DRAGON_COUNT {
+            return Err(format!("Too many {} dragons: {}", color, dragon_count).into());
+        }
+
+        {
+            let mut missing = false;
+            for number in 9..=1 {
+                let card_count = get(Card::Number(color, number));
+                match card_count {
+                    0 => missing = true,
+                    1 => {
+                        if missing {
+                            return Err(format!("Missing {} card: {}", color, number + 1).into());
+                        }
+                    }
+                    _ => return Err(format!("Too many {} cards: {}", color, number).into()),
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 pub(crate) trait Pile {
