@@ -67,75 +67,22 @@ impl fmt::Display for State {
     }
 }
 
+pub(crate) fn load_trays_and_slots(
+    input: String,
+) -> ([Vec<Card>; TRAY_COUNT], [Option<Card>; SLOT_COUNT]) {
+    let mut trays = [const { Vec::new() }; TRAY_COUNT];
+    let slots = [None; SLOT_COUNT];
 
-pub(crate) fn load_trays_and_slots() -> ([Vec<Card>; TRAY_COUNT], [Option<Card>; SLOT_COUNT]) {
-    (
-        [
-            // b3 dg db db b6
-            vec![
-                Card::Number(Color::Black, 3),
-                Card::Dragon(Color::Green),
-                Card::Dragon(Color::Black),
-                Card::Dragon(Color::Black),
-                Card::Number(Color::Black, 6),
-            ],
-            // r3 dr r7 b8 dr
-            vec![
-                Card::Number(Color::Red, 3),
-                Card::Dragon(Color::Red),
-                Card::Number(Color::Red, 7),
-                Card::Number(Color::Black, 8),
-                Card::Dragon(Color::Red),
-            ],
-            // dr g9 r9 g1 db
-            vec![
-                Card::Dragon(Color::Red),
-                Card::Number(Color::Green, 9),
-                Card::Number(Color::Red, 9),
-                Card::Number(Color::Green, 1),
-                Card::Dragon(Color::Black),
-            ],
-            // b4 g7 g2 r2 dr
-            vec![
-                Card::Number(Color::Black, 4),
-                Card::Number(Color::Green, 7),
-                Card::Number(Color::Green, 2),
-                Card::Number(Color::Red, 2),
-                Card::Dragon(Color::Red),
-            ],
-            // r8 g4 g3 b7
-            vec![
-                Card::Number(Color::Red, 8),
-                Card::Number(Color::Green, 4),
-                Card::Number(Color::Green, 3),
-                Card::Number(Color::Black, 7),
-            ],
-            // b2 r5 g5 dg b5
-            vec![
-                Card::Number(Color::Black, 2),
-                Card::Number(Color::Red, 5),
-                Card::Number(Color::Green, 5),
-                Card::Dragon(Color::Green),
-                Card::Number(Color::Black, 5),
-            ],
-            // g6 g8 dg dg
-            vec![
-                Card::Number(Color::Green, 6),
-                Card::Number(Color::Green, 8),
-                Card::Dragon(Color::Green),
-                Card::Dragon(Color::Green),
-            ],
-            // f r6 db r4 b9
-            vec![
-                Card::Flower,
-                Card::Number(Color::Red, 6),
-                Card::Dragon(Color::Black),
-                Card::Number(Color::Red, 4),
-                Card::Number(Color::Black, 9),
-            ],
-        ],
-        [None, None, None],
-    )
+    for (i, line) in input.lines().enumerate() {
+        if i < TRAY_COUNT {
+            trays[i] = line
+                .split_whitespace()
+                .map(|s| s.parse::<Card>().expect("Invalid card format"))
+                .collect();
+        }
+    }
+
+    (trays, slots)
 }
 
 pub(crate) fn print_solution(actions: &[Action], iteration_count: usize) {
