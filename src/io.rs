@@ -8,7 +8,7 @@ impl fmt::Display for Action {
         match self {
             Action::Pop { src } => write!(f, "Pop from {src}"),
             Action::Move { src, dest, count } => {
-                write!(f, "Move {count} cards from {src} to {dest}")
+                write!(f, "Move {count} card{} from {src} to {dest}", if *count > 1 { "s" } else { "" })
             }
             Action::CollapseDragon(color) => write!(f, "Collapse {color} Dragon"),
         }
@@ -92,6 +92,6 @@ pub(crate) fn print_solution(actions: &[Action], iteration_count: usize) {
     );
 
     for (i, action) in actions.iter().enumerate() {
-        println!("Step {i}: {action}", i = i + 1);
+        println!("Step {i:2}: {action}", i = i + 1);
     }
 }
