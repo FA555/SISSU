@@ -43,10 +43,10 @@ impl FromStr for Card {
 
         // Check for special cards
         match s {
-            "f" => return Ok(Card::Flower),
-            "dr" => return Ok(Card::Dragon(Color::Red)),
-            "dg" => return Ok(Card::Dragon(Color::Green)),
-            "db" => return Ok(Card::Dragon(Color::Black)),
+            "f" | "ff" => return Ok(Card::Flower),
+            "rd" | "rr" => return Ok(Card::Dragon(Color::Red)),
+            "gd" | "gg" => return Ok(Card::Dragon(Color::Green)),
+            "bd" | "bb" => return Ok(Card::Dragon(Color::Black)),
             _ => {}
         }
 
