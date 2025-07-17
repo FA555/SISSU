@@ -131,16 +131,16 @@ impl State {
                     }
                 }
             }
-            Action::Collapse(dragon) => {
+            Action::CollapseDragon(color) => {
                 for tray in state.trays.iter_mut() {
-                    if !tray.is_empty() && *tray.last().unwrap() == Card::Dragon(dragon) {
+                    if !tray.is_empty() && *tray.last().unwrap() == Card::Dragon(color) {
                         tray.pop();
                     }
                 }
 
                 for slot in state.slots.iter_mut() {
                     if let Some(card) = slot {
-                        if *card == Card::Dragon(dragon) {
+                        if *card == Card::Dragon(color) {
                             *slot = None;
                         }
                     }
@@ -281,9 +281,9 @@ impl State {
     pub(crate) fn valid_actions(&self) -> Vec<Action> {
         let mut actions = Vec::new();
         let mut exposed_dragon_count = HashMap::from([
-            (Dragon(Color::Red), 0),
-            (Dragon(Color::Green), 0),
-            (Dragon(Color::Black), 0),
+            (Color::Red, 0),
+            (Color::Green, 0),
+            (Color::Black, 0),
         ]);
 
         for (i, tray) in self.trays.iter().enumerate() {
@@ -291,8 +291,8 @@ impl State {
                 continue;
             }
 
-            if let &Card::Dragon(dragon) = tray.last().unwrap() {
-                *exposed_dragon_count.get_mut(&dragon).unwrap() += 1;
+            if let &Card::Dragon(color) = tray.last().unwrap() {
+                *exposed_dragon_count.get_mut(&color).unwrap() += 1;
             } else if let &Card::Number(color, number) = tray.last().unwrap() {
                 if self.lowest_each_suit[&color] == number {
                     actions.push(Action::Pop {
@@ -334,9 +334,9 @@ impl State {
 
         let mut has_empty_slot = false;
         let mut has_empty_slot_for_specicific_dragon = HashMap::from([
-            (Dragon(Color::Red), false),
-            (Dragon(Color::Green), false),
-            (Dragon(Color::Black), false),
+            (Color::Red, false),
+            (Color::Green, false),
+            (Color::Black, false),
         ]);
 
         for (i, &slot) in self.slots.iter().enumerate() {
@@ -348,9 +348,9 @@ impl State {
                     continue;
                 }
                 Some(card) => {
-                    if let Card::Dragon(dragon) = card {
-                        *exposed_dragon_count.get_mut(&dragon).unwrap() += 1;
-                        has_empty_slot_for_specicific_dragon.insert(dragon, true);
+                    if let Card::Dragon(color) = card {
+                        *exposed_dragon_count.get_mut(&color).unwrap() += 1;
+                        has_empty_slot_for_specicific_dragon.insert(color, true);
                     }
                     for (j, tray) in self.trays.iter().enumerate() {
                         if tray.is_empty() || can_be_stacked(card, *tray.last().unwrap()) {
@@ -365,11 +365,11 @@ impl State {
             }
         }
 
-        for dragon in Dragon::values() {
-            if exposed_dragon_count[&dragon] == DRAGON_COUNT
-                && (has_empty_slot || has_empty_slot_for_specicific_dragon[&dragon])
+        for color in Color::values() {
+            if exposed_dragon_count[&color] == DRAGON_COUNT
+                && (has_empty_slot || has_empty_slot_for_specicific_dragon[&color])
             {
-                actions.push(Action::Collapse(dragon));
+                actions.push(Action::CollapseDragon(color));
             }
         }
 

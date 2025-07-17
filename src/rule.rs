@@ -27,19 +27,10 @@ impl FromStr for Color {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub(crate) struct Dragon(pub(crate) Color);
-
-impl Dragon {
-    pub(crate) fn values() -> impl Iterator<Item = Dragon> {
-        Color::values().map(Dragon)
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Hash, Debug)]
 pub(crate) enum Card {
     CollapsedDragon,
-    Dragon(Dragon),
+    Dragon(Color),
     Flower,
     Number(Color, i8),
 }
@@ -53,9 +44,9 @@ impl FromStr for Card {
         // Check for special cards
         match s {
             "f" => return Ok(Card::Flower),
-            "dr" => return Ok(Card::Dragon(Dragon(Color::Red))),
-            "dg" => return Ok(Card::Dragon(Dragon(Color::Green))),
-            "db" => return Ok(Card::Dragon(Dragon(Color::Black))),
+            "dr" => return Ok(Card::Dragon(Color::Red)),
+            "dg" => return Ok(Card::Dragon(Color::Green)),
+            "db" => return Ok(Card::Dragon(Color::Black)),
             _ => {}
         }
 
@@ -98,7 +89,7 @@ pub(crate) enum Action {
         dest: Place,
         count: usize,
     },
-    Collapse(Dragon),
+    CollapseDragon(Color),
 }
 
 pub(crate) fn can_be_stacked(src: Card, dest: Card) -> bool {
@@ -146,18 +137,9 @@ mod tests {
         assert_eq!("f".parse::<Card>().unwrap(), Card::Flower);
 
         // Test short dragon names
-        assert_eq!(
-            "dr".parse::<Card>().unwrap(),
-            Card::Dragon(Dragon(Color::Red))
-        );
-        assert_eq!(
-            "dg".parse::<Card>().unwrap(),
-            Card::Dragon(Dragon(Color::Green))
-        );
-        assert_eq!(
-            "db".parse::<Card>().unwrap(),
-            Card::Dragon(Dragon(Color::Black))
-        );
+        assert_eq!("dr".parse::<Card>().unwrap(), Card::Dragon(Color::Red));
+        assert_eq!("dg".parse::<Card>().unwrap(), Card::Dragon(Color::Green));
+        assert_eq!("db".parse::<Card>().unwrap(), Card::Dragon(Color::Black));
 
         // Test number cards (compact format only)
         assert_eq!("r1".parse::<Card>().unwrap(), Card::Number(Color::Red, 1));
